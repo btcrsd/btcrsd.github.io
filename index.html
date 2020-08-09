@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BTC/RSD DEX</title>
+	<style>
+		body {
+			margin: auto auto 50px auto;
+			width: 600px;
+			font-family: "Trebuchet MS", sans-serif;
+			font-size: 14pt;
+		}
+		* {
+			padding: 8px;
+			text-align: center;
+		}
+		input {
+			font-family: inherit;
+			font-size: 18pt;
+		}
+		.row {
+			display: flex;
+		}
+		.column {
+			flex: 50%;
+		}
+		hr {
+			height: 1px;
+			border-width: 0;
+			background-color: gray;
+			padding: 0;
+			margin-top: 30px;
+		}
+		.bold {
+			font-weight: bold;
+		}
+		.small {
+			font-size: 10pt;
+		}
+		@media screen and (max-width: 600px) {
+			body {
+				max-width: 95%;
+			}
+			.row {
+				flex-direction: column;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div>Iznos u RSD</div>
+	<input id="rsdiznos" class="bold" type="text" inputmode="numeric" size="8" maxlength="5" autofocus>
+	<div class="row">
+		<div class="column">
+			<div>USD/RSD kurs<br><span class="small">Izvor: NBS srednji kurs</span></div>
+			<input id="usdrsdkurs" type="text" size="8" disabled></input>
+		</div>
+		<div class="column">
+			<div>BTC/USD kurs<br><span class="small">Izvor: Binance</span></div>
+			<input id="btcusdkurs" type="text" size="8" disabled></input>
+		</div>
+	</div>
+	<div class="row">
+		<div class="column">
+			<div>Izveden BTC/RSD kurs</div>
+			<input id="btcrsdkurs" type="text" size="8" disabled></input>
+		</div>
+		<div class="column">
+			<div>Iznos u BTC</div>
+			<input id="btciznos" type="text" value="0.00000000" size="8" disabled></input>
+		</div>
+	</div>
+	<div>Garancija</div>
+	<input id="garancija" class="bold" type="text" value="0" size="8" disabled></input>
+	<hr>
+	<div class="row">
+		<div class="column">
+			<div>Ukupno BTC u novčaniku</div>
+			<input id="ukupnobtc" type="text" inputmode="numeric" size="8" maxlength="10" disabled=""></input>
+		</div>
+		<div class="column">
+			<div>Provizija</div>
+			<input id="provizija" type="text" inputmode="numeric" size="8" maxlength="10" disabled></input>
+		</div>
+	</div>
+	<div>Za kupca</div>
+	<input id="zakupca" class="bold" type="text" size="8" disabled></input>
+	<script>
+		const rsdTextbox = document.getElementById("rsdiznos");
+		const btcTextbox = document.getElementById("btciznos");
+		const ukupnoTextbox = document.getElementById("ukupnobtc");
+		const provizijaTextbox = document.getElementById("provizija");
+
+		restrictInput = (textbox, inputFilter) => {
+			["input", "keydown", "keyup", "mousedown", "mouseup", "select", "contextmenu", "drop"].forEach(event => {
+				textbox.addEventListener(event, function() {
+					if (inputFilter(this.value)) {
+						this.oldValue = this.value;
+						this.oldSelectionStart = this.selectionStart;
+						this.oldSelectionEnd = this.selectionEnd;
+					} else if (this.hasOwnProperty("oldValue")) {
+						this.value = this.oldValue;
+						this.setSelectionRange(this.oldSelectionStart, this.oldSelectionEnd);
+					} else {
+						this.value = "";
+					}
+				});
+			});
+		}
+		restrictInput(rsdTextbox, value => {
+			return /^\d*$/.test(value);
+		});
+		[ukupnoTextbox, provizijaTextbox].forEach(element => {
+			restrictInput(element, value => {
+				return /^\d*[.]?\d*$/.test(value);
+			});
+		});
+
+		fetch('https://www.ku.rs/kurs-dinara.html').then(response => response.text()).then(html => {
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(html, "text/html");
+			const xpath = "//td[text()='USD']/following-sibling::td[2]/text()";
+			const result = doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.textContent;
+			const usdrsd = result;
+			document.getElementById("usdrsdkurs").value = usdrsd;
+			
+			return fetch('https://api.binance.com/api/v1/ticker/price?symbol=BTCUSDT').then(response => response.json()).then(json => {
+				const btcusd = Number(json["price"]);
+				document.getElementById("btcusdkurs").value = btcusd.toFixed(2);
+				const btcrsd = usdrsd * btcusd;
+				document.getElementById("btcrsdkurs").value = btcrsd.toFixed(2);
+
+				rsdTextbox.oninput = () => {
+					ukupnoTextbox.disabled = false;
+					var btc = (rsdTextbox.value/btcrsd).toFixed(8);
+					document.getElementById("btciznos").value = btc;
+					var garancija = document.getElementById("garancija").value = Math.ceil(btc*30000)/10000;
+					if (garancija > 0) {
+						document.getElementById("ukupnobtc").placeholder = String((garancija * 2 - 0.0001)).substring(0,5) + "...";
+					} else {
+						document.getElementById("ukupnobtc").placeholder = "";
+					}
+				}
+				[ukupnoTextbox, provizijaTextbox].forEach(element => {
+					element.oninput = () => {
+						rsdTextbox.disabled = true;
+						provizijaTextbox.disabled = false;
+						document.getElementById("zakupca").value = Math.round((((ukupnoTextbox.value - provizijaTextbox.value)/2)+Number(btcTextbox.value))*100000000)/100000000;
+					}
+				});
+			});
+		}).catch(error => {
+			console.warn(error);
+			document.getElementById("usdrsdkurs").value = "Greška :(";
+		});
+	</script>
+</body>
+</html>

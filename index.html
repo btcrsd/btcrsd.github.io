@@ -63,16 +63,14 @@
 	</div>
 	<div class="row">
 		<div class="column">
-			<div>Izveden BTC/RSD kurs</div>
-			<input id="btcrsdkurs" type="text" size="8" disabled></input>
-		</div>
-		<div class="column">
 			<div>Iznos u BTC</div>
 			<input id="btciznos" type="text" value="0.00000000" size="8" disabled></input>
 		</div>
+		<div class="column">
+			<div>Garancija</div>
+			<input id="garancija" class="bold" type="text" value="0" size="8" disabled></input>
+		</div>
 	</div>
-	<div>Garancija</div>
-	<input id="garancija" class="bold" type="text" value="0" size="8" disabled></input>
 	<hr>
 	<div class="row">
 		<div class="column">
@@ -128,12 +126,10 @@
 			return fetch('https://api.binance.com/api/v1/ticker/price?symbol=BTCUSDT').then(response => response.json()).then(json => {
 				const btcusd = Number(json["price"]);
 				document.getElementById("btcusdkurs").value = btcusd.toFixed(2);
-				const btcrsd = usdrsd * btcusd;
-				document.getElementById("btcrsdkurs").value = btcrsd.toFixed(2);
 
 				rsdTextbox.oninput = () => {
 					ukupnoTextbox.disabled = false;
-					var btc = (rsdTextbox.value/btcrsd).toFixed(8);
+					var btc = (rsdTextbox.value/usdrsd/btcusd).toFixed(8);
 					document.getElementById("btciznos").value = btc;
 					var garancija = document.getElementById("garancija").value = Math.ceil(btc*30000)/10000;
 					if (garancija > 0) {
